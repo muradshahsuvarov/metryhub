@@ -14,7 +14,7 @@ Online market for iot device data exchange
 ```
 
 
-### Run Iot Device Simulator
+### Run IoT Device Simulator
 
 ```
     go run .\iot_device.go -client_id <Client Name> -device_token <Device Name> -topic <Mosquitto topic>
@@ -24,4 +24,16 @@ Example:
 
 ```
     go run .\iot_device.go -client_id "MyClient" -device_token "HumidSense" -topic "iot_device_1"
+```
+
+### Run Mosquitto Subscriber
+
+```
+mosquitto_sub -h localhost -t <Mosquitto topic>
+```
+
+Example:
+
+```
+mosquitto_sub -h localhost -t "iot_device_1"
 ```
