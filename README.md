@@ -1,4 +1,4 @@
-# MetryHub
+# METRYHUB
 
 ### Description
 Online market for iot device data exchange
