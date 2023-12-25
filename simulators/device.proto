@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package iot;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = ".";
+
+message IotData {
+    string device_token = 1;
+    message DeviceData {
+        float temperature = 1;
+        float humidity = 2;
+    }
+    DeviceData data = 2;
+    google.protobuf.Timestamp timestamp = 3;
+}
