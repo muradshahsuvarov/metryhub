@@ -32,7 +32,7 @@ func main() {
 	var err error
 
 	// Connect to the PostgreSQL database
-	db, err = sql.Open("postgres", "user=postgres dbname=metryhub password=Muradikov_21 sslmode=disable")
+	db, err = sql.Open("postgres", "user=postgres dbname=metryhub password=your-password sslmode=disable")
 	if err != nil {
 		log.Fatal("Error connecting to the database: ", err)
 	}
