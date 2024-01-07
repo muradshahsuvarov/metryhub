@@ -66,15 +66,15 @@ func main() {
 		api.GET("/", dashboardRedirect)
 
 		// Define routes for admin, client, and vendor
-		adminRoutes := api.Group("/admin").Use(requireRole("admin"))
-		{
-			// admin-specific routes
-		}
+		// adminRoutes := api.Group("/admin").Use(requireRole("admin"))
+		// {
+		// 	// admin-specific routes
+		// }
 
-		clientRoutes := api.Group("/client").Use(requireRole("client"))
-		{
-			// client-specific routes
-		}
+		// clientRoutes := api.Group("/client").Use(requireRole("client"))
+		// {
+		// 	// client-specific routes
+		// }
 
 		vendorRoutes := api.Group("/vendor").Use(requireRole("vendor"))
 		{
