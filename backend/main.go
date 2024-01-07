@@ -25,6 +25,11 @@ type UserLoginRequest struct {
 	Password string `json:"password" binding:"required"`
 }
 
+type IoTDeviceRegistrationRequest struct {
+	DeviceName string `json:"deviceName" binding:"required"`
+	DeviceType string `json:"deviceType" binding:"required"`
+}
+
 var db *sql.DB
 var jwtSecretKey []byte
 
@@ -59,6 +64,29 @@ func main() {
 	api.Use(authMiddleware())
 	{
 		api.GET("/", dashboardRedirect)
+
+		// Define routes for admin, client, and vendor
+		adminRoutes := api.Group("/admin").Use(requireRole("admin"))
+		{
+			// admin-specific routes
+		}
+
+		clientRoutes := api.Group("/client").Use(requireRole("client"))
+		{
+			// client-specific routes
+		}
+
+		vendorRoutes := api.Group("/vendor").Use(requireRole("vendor"))
+		{
+			// GET request to vendor dashboard
+			vendorRoutes.GET("/", func(c *gin.Context) {
+				userEmail, _ := c.Get("email")
+				userName, userRole := getUserDetails(userEmail.(string))
+				vendorDashboard(c, userName, userRole)
+			})
+			// POST request to register an IoT device
+			vendorRoutes.POST("/register-device", registerIoTDevice)
+		}
 	}
 
 	r.Run()
@@ -223,4 +251,23 @@ func requireRole(role string) gin.HandlerFunc {
 		}
 		c.Next()
 	}
+}
+
+func registerIoTDevice(c *gin.Context) {
+	var req IoTDeviceRegistrationRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	userEmail, _ := c.Get("email")
+
+	_, err := db.Exec("INSERT INTO iot_devices (vendor_email, device_name, device_type) VALUES ($1, $2, $3)",
+		userEmail.(string), req.DeviceName, req.DeviceType)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to register IoT device"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "IoT device registered successfully"})
 }
