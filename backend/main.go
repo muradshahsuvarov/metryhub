@@ -3,6 +3,7 @@ package main
 import (
 	generator "backend/src"
 	"database/sql"
+	"fmt"
 	"log"
 	"net/http"
 
@@ -32,7 +33,7 @@ func main() {
 	var err error
 
 	// Connect to the PostgreSQL database
-	db, err = sql.Open("postgres", "user=postgres dbname=metryhub password=your-password sslmode=disable")
+	db, err = sql.Open("postgres", "user=postgres dbname=metryhub password=Muradikov_21 sslmode=disable")
 	if err != nil {
 		log.Fatal("Error connecting to the database: ", err)
 	}
@@ -54,7 +55,54 @@ func main() {
 
 	r.POST("/login", loginUser)
 
+	api := r.Group("/dashboard")
+	api.Use(authMiddleware())
+	{
+		api.GET("/", dashboardRedirect)
+	}
+
 	r.Run()
+}
+
+func dashboardRedirect(c *gin.Context) {
+	userEmail, _ := c.Get("email")
+	userName, userRole := getUserDetails(userEmail.(string))
+
+	switch userRole {
+	case "admin":
+		adminDashboard(c, userName, userRole)
+	case "client":
+		clientDashboard(c, userName, userRole)
+	case "vendor":
+		vendorDashboard(c, userName, userRole)
+	default:
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
+	}
+}
+
+func adminDashboard(c *gin.Context, userName, userRole string) {
+	message := fmt.Sprintf("Welcome to the %s Dashboard %s", userRole, userName)
+	c.JSON(http.StatusOK, gin.H{"message": message})
+}
+
+func clientDashboard(c *gin.Context, userName, userRole string) {
+	message := fmt.Sprintf("Welcome to the %s Dashboard %s", userRole, userName)
+	c.JSON(http.StatusOK, gin.H{"message": message})
+}
+
+func vendorDashboard(c *gin.Context, userName, userRole string) {
+	message := fmt.Sprintf("Welcome to the %s Dashboard %s", userRole, userName)
+	c.JSON(http.StatusOK, gin.H{"message": message})
+}
+
+func getUserDetails(email string) (string, string) {
+	var name, role string
+	err := db.QueryRow("SELECT users.name, roles.role_name FROM users JOIN roles ON users.role_id = roles.role_id WHERE users.email = $1", email).Scan(&name, &role)
+	if err != nil {
+		log.Printf("Error fetching user details: %v", err)
+		return "", ""
+	}
+	return name, role
 }
 
 func registerUser(c *gin.Context) {
@@ -147,12 +195,32 @@ func authMiddleware() gin.HandlerFunc {
 		}
 
 		if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-			c.Set("email", claims["email"])
+			userEmail := claims["email"].(string)
+			var userRole string
+			err := db.QueryRow("SELECT role_name FROM roles JOIN users ON roles.role_id = users.role_id WHERE users.email = $1", userEmail).Scan(&userRole)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify user role"})
+				return
+			}
+
+			c.Set("email", userEmail)
+			c.Set("role", userRole)
 		} else {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
 			return
 		}
 
+		c.Next()
+	}
+}
+
+func requireRole(role string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userRole, exists := c.Get("role")
+		if !exists || userRole != role {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Insufficient permissions"})
+			return
+		}
 		c.Next()
 	}
 }
