@@ -11,6 +11,7 @@ const HomePage = () => {
   const [roles, setRoles] = useState([]);
 
   useEffect(() => {
+    document.title = "MetryHub";
     const fetchRoles = async () => {
       try {
         const response = await fetch('http://localhost:8080/roles');
