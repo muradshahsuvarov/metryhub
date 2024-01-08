@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/dgrijalva/jwt-go"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
@@ -40,6 +41,12 @@ type DeviceDataRequest struct {
 	DataValue   string `json:"dataValue" binding:"required"`
 }
 
+type Role struct {
+	RoleID      int    `json:"role_id"`
+	RoleName    string `json:"role_name"`
+	Description string `json:"description"`
+}
+
 var db *sql.DB
 var jwtSecretKey []byte
 
@@ -62,6 +69,14 @@ func main() {
 
 	r := gin.Default()
 
+	// Setup CORS
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"http://localhost:3000"}, // Adjust the port if your frontend is on a different port
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		AllowCredentials: true,
+	}))
+
 	r.GET("/", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "Welcome to MetryHub"})
 	})
@@ -71,6 +86,8 @@ func main() {
 	r.POST("/login", loginUser)
 
 	r.POST("/device-data", postDeviceData)
+
+	r.GET("/roles", getPublicRoles)
 
 	api := r.Group("/dashboard")
 	api.Use(authMiddleware())
@@ -337,4 +354,32 @@ func postDeviceData(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Device data saved successfully"})
+}
+
+func getPublicRoles(c *gin.Context) {
+	var roles []Role
+	rows, err := db.Query("SELECT role_id, role_name, description FROM roles WHERE public = true")
+	if err != nil {
+		log.Printf("Error getting public roles: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve roles"})
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var role Role
+		if err := rows.Scan(&role.RoleID, &role.RoleName, &role.Description); err != nil {
+			log.Printf("Error scanning roles: %v", err)
+			continue
+		}
+		roles = append(roles, role)
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Printf("Error reading roles: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read roles"})
+		return
+	}
+
+	c.JSON(http.StatusOK, roles)
 }
