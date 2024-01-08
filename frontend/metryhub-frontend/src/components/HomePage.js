@@ -1,14 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Container, Typography, TextField, Button, Paper, Dialog, DialogTitle, DialogContent, FormControl, InputLabel, Select, MenuItem, Tooltip, IconButton } from '@mui/material';
+import { Box, Container, Typography, TextField, Button, Paper, Dialog, DialogTitle, DialogContent, FormControl, InputLabel, Select, MenuItem, Tooltip, IconButton, Snackbar, Alert } from '@mui/material';
 import SensorsIcon from '@mui/icons-material/Sensors';
 import PublicIcon from '@mui/icons-material/Public';
 import SpeedIcon from '@mui/icons-material/Speed';
 import InfoIcon from '@mui/icons-material/Info';
 
+import { useFormik } from 'formik';
+import * as Yup from 'yup';
+
 const HomePage = () => {
   const [open, setOpen] = useState(false);
   const [role, setRole] = useState(null);
   const [roles, setRoles] = useState([]);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
     document.title = "MetryHub";
@@ -38,20 +43,63 @@ const HomePage = () => {
     setRole(selectedRole);
   };
 
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-    const data = new FormData(event.currentTarget);
-    const payload = {
-      name: data.get('name'),
-      email: data.get('email'),
-      password: data.get('password'),
-      confirmPassword: data.get('confirmPassword'),
-      role: role,
-    };
-
-    console.log(payload);
-    handleClose();
-  };
+  const formik = useFormik({
+    initialValues: {
+      name: '',
+      email: '',
+      password: '',
+      confirmPassword: '',
+    },
+    validationSchema: Yup.object({
+      name: Yup.string().required('Required'),
+      email: Yup.string().email('Invalid email address').required('Required'),
+      password: Yup.string().min(6, 'Password must be at least 6 characters').required('Required'),
+      confirmPassword: Yup.string()
+        .oneOf([Yup.ref('password'), null], 'Passwords must match')
+        .required('Required'),
+    }),
+    onSubmit: async (values, { setSubmitting }) => {
+      if (!formik.isValid || !formik.dirty) {
+        setSubmitting(false);
+        return;
+      }
+    
+      const payload = {
+        name: values.name,
+        email: values.email,
+        password: values.password,
+        role: role.role_name, // Assuming that the role object has a role_name property
+      };
+    
+      try {
+        const response = await fetch('http://localhost:8080/register', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+    
+        if (response.ok) {
+          const result = await response.json();
+          setSuccessMessage(result.message || 'Registration successful!');
+          handleClose();
+        } else {
+          const errorResult = await response.json();
+          // Check if the error message is about user existence
+          if (errorResult.error.includes("User already exists")) {
+            setErrorMessage("A user with this email already exists.");
+          } else {
+            setErrorMessage(errorResult.error || 'Registration failed.');
+          }
+        }
+      } catch (error) {
+        setErrorMessage(error.message || 'An unexpected error occurred.');
+      } finally {
+        setSubmitting(false);
+      }
+    },
+  });
 
   const backgroundColor = 'rgba(242, 245, 250, 1)';
 
@@ -134,8 +182,8 @@ const HomePage = () => {
       <Dialog open={open} onClose={handleClose}>
       <DialogTitle>Create New Account</DialogTitle>
       <DialogContent>
-        <Box component="form" noValidate onSubmit={handleSubmit} sx={{ mt: 1 }}>
-          <TextField
+        <Box component="form" noValidate onSubmit={formik.handleSubmit} sx={{ mt: 1 }}>
+         <TextField
             margin="normal"
             required
             fullWidth
@@ -143,6 +191,10 @@ const HomePage = () => {
             label="Name"
             name="name"
             autoComplete="name"
+            onChange={formik.handleChange}
+            value={formik.values.name}
+            error={formik.touched.name && Boolean(formik.errors.name)}
+            helperText={formik.touched.name && formik.errors.name}
           />
           <TextField
             margin="normal"
@@ -152,6 +204,10 @@ const HomePage = () => {
             label="Email Address"
             name="email"
             autoComplete="email"
+            onChange={formik.handleChange}
+            value={formik.values.email}
+            error={formik.touched.email && Boolean(formik.errors.email)}
+            helperText={formik.touched.email && formik.errors.email}
           />
           <TextField
             margin="normal"
@@ -162,6 +218,10 @@ const HomePage = () => {
             type="password"
             id="register-password"
             autoComplete="new-password"
+            onChange={formik.handleChange}
+            value={formik.values.password}
+            error={formik.touched.password && Boolean(formik.errors.password)}
+            helperText={formik.touched.password && formik.errors.password}
           />
           <TextField
             margin="normal"
@@ -172,6 +232,10 @@ const HomePage = () => {
             type="password"
             id="register-confirm-password"
             autoComplete="new-password"
+            onChange={formik.handleChange}
+            value={formik.values.confirmPassword}
+            error={formik.touched.confirmPassword && Boolean(formik.errors.confirmPassword)}
+            helperText={formik.touched.confirmPassword && formik.errors.confirmPassword}
           />
           <FormControl fullWidth margin="normal">
             <InputLabel id="role-select-label">Role</InputLabel>
@@ -206,6 +270,16 @@ const HomePage = () => {
         </Box>
       </DialogContent>
     </Dialog>
+    <Snackbar open={!!successMessage} autoHideDuration={6000} onClose={() => setSuccessMessage('')}>
+        <Alert onClose={() => setSuccessMessage('')} severity="success" sx={{ width: '100%' }}>
+          {successMessage}
+        </Alert>
+      </Snackbar>
+      <Snackbar open={!!errorMessage} autoHideDuration={6000} onClose={() => setErrorMessage('')}>
+        <Alert onClose={() => setErrorMessage('')} severity="error" sx={{ width: '100%' }}>
+          {errorMessage}
+        </Alert>
+      </Snackbar>
     </Container>
   );
 };
