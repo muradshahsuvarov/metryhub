@@ -13,6 +13,17 @@ Online market for iot device data exchange
     protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative device.proto
 ```
 
+### Run Local Listener
+
+```
+    go run listener.go -client_id "Client Name" -topic "Topic Name" -device_token "Device Token"
+```
+
+Example:
+
+```
+    go run listener.go -client_id Murad -topic iot_device_2 -device_token DqvdA5u-_QIQi7mGD094rtTX3xs=
+```
 
 ### Run IoT Device Simulator
 
