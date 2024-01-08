@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/dgrijalva/jwt-go"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
@@ -28,6 +29,22 @@ type UserLoginRequest struct {
 type IoTDeviceRegistrationRequest struct {
 	DeviceName string `json:"deviceName" binding:"required"`
 	DeviceType string `json:"deviceType" binding:"required"`
+}
+
+type SubscriptionRequest struct {
+	DeviceID int `json:"deviceID" binding:"required"`
+}
+
+type DeviceDataRequest struct {
+	DeviceToken string `json:"deviceToken" binding:"required"`
+	DataKey     string `json:"dataKey" binding:"required"`
+	DataValue   string `json:"dataValue" binding:"required"`
+}
+
+type Role struct {
+	RoleID      int    `json:"role_id"`
+	RoleName    string `json:"role_name"`
+	Description string `json:"description"`
 }
 
 var db *sql.DB
@@ -52,6 +69,14 @@ func main() {
 
 	r := gin.Default()
 
+	// Setup CORS
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"http://localhost:3000"}, // Adjust the port if your frontend is on a different port
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		AllowCredentials: true,
+	}))
+
 	r.GET("/", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "Welcome to MetryHub"})
 	})
@@ -59,6 +84,10 @@ func main() {
 	r.POST("/register", registerUser)
 
 	r.POST("/login", loginUser)
+
+	r.POST("/device-data", postDeviceData)
+
+	r.GET("/roles", getPublicRoles)
 
 	api := r.Group("/dashboard")
 	api.Use(authMiddleware())
@@ -71,20 +100,23 @@ func main() {
 		// 	// admin-specific routes
 		// }
 
-		// clientRoutes := api.Group("/client").Use(requireRole("client"))
-		// {
-		// 	// client-specific routes
-		// }
+		clientRoutes := api.Group("/client").Use(requireRole("client"))
+		{
+			clientRoutes.GET("/", func(c *gin.Context) {
+				userEmail, _ := c.Get("email")
+				userName, userRole := getUserDetails(userEmail.(string))
+				clientDashboard(c, userName, userRole)
+			})
+			clientRoutes.POST("/subscribe-device", subscribeToDevice)
+		}
 
 		vendorRoutes := api.Group("/vendor").Use(requireRole("vendor"))
 		{
-			// GET request to vendor dashboard
 			vendorRoutes.GET("/", func(c *gin.Context) {
 				userEmail, _ := c.Get("email")
 				userName, userRole := getUserDetails(userEmail.(string))
 				vendorDashboard(c, userName, userRole)
 			})
-			// POST request to register an IoT device
 			vendorRoutes.POST("/register-device", registerIoTDevice)
 		}
 	}
@@ -262,12 +294,92 @@ func registerIoTDevice(c *gin.Context) {
 
 	userEmail, _ := c.Get("email")
 
-	_, err := db.Exec("INSERT INTO iot_devices (vendor_email, device_name, device_type) VALUES ($1, $2, $3)",
-		userEmail.(string), req.DeviceName, req.DeviceType)
+	deviceToken := generator.GenerateShortDeviceToken()
+
+	_, err := db.Exec("INSERT INTO iot_devices (vendor_email, device_name, device_type, device_token) VALUES ($1, $2, $3, $4)",
+		userEmail.(string), req.DeviceName, req.DeviceType, deviceToken)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to register IoT device"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "IoT device registered successfully"})
+	c.JSON(http.StatusOK, gin.H{"message": "IoT device registered successfully", "deviceToken": deviceToken})
+}
+
+func subscribeToDevice(c *gin.Context) {
+
+	userEmail, _ := c.Get("email")
+
+	var subscriptionRequest SubscriptionRequest
+
+	if err := c.ShouldBindJSON(&subscriptionRequest); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	_, err := db.Exec("INSERT INTO client_subscriptions (client_email, device_id) VALUES ($1, $2)",
+		userEmail.(string), subscriptionRequest.DeviceID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to subscribe to IoT device"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Subscribed to IoT device successfully"})
+}
+
+func postDeviceData(c *gin.Context) {
+	var req DeviceDataRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	var deviceExists bool
+	err := db.QueryRow("SELECT EXISTS (SELECT 1 FROM iot_devices WHERE device_token = $1)", req.DeviceToken).Scan(&deviceExists)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify device token"})
+		return
+	}
+
+	if !deviceExists {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Device token not found"})
+		return
+	}
+
+	_, err = db.Exec("INSERT INTO device_data (device_id, data_key, data_value) VALUES ((SELECT device_id FROM iot_devices WHERE device_token = $1), $2, $3)",
+		req.DeviceToken, req.DataKey, req.DataValue)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save device data"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Device data saved successfully"})
+}
+
+func getPublicRoles(c *gin.Context) {
+	var roles []Role
+	rows, err := db.Query("SELECT role_id, role_name, description FROM roles WHERE public = true")
+	if err != nil {
+		log.Printf("Error getting public roles: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve roles"})
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var role Role
+		if err := rows.Scan(&role.RoleID, &role.RoleName, &role.Description); err != nil {
+			log.Printf("Error scanning roles: %v", err)
+			continue
+		}
+		roles = append(roles, role)
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Printf("Error reading roles: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read roles"})
+		return
+	}
+
+	c.JSON(http.StatusOK, roles)
 }

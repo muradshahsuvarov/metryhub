@@ -1,6 +1,12 @@
 package generator
 
-import "crypto/rand"
+import (
+	"crypto/rand"
+	"crypto/sha1"
+	"encoding/base64"
+
+	"github.com/google/uuid"
+)
 
 func GenerateSecretKey(length int) ([]byte, error) {
 	key := make([]byte, length)
@@ -9,4 +15,15 @@ func GenerateSecretKey(length int) ([]byte, error) {
 		return nil, err
 	}
 	return key, nil
+}
+
+func GenerateShortDeviceToken() string {
+	uuidString := uuid.New().String()
+
+	hasher := sha1.New()
+	hasher.Write([]byte(uuidString))
+	hashBytes := hasher.Sum(nil)
+
+	encoded := base64.URLEncoding.EncodeToString(hashBytes)
+	return encoded
 }
