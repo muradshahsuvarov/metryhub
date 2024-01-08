@@ -172,12 +172,26 @@ func registerUser(c *gin.Context) {
 		return
 	}
 
+	// Check if user already exists
+	var exists bool
+	err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)", req.Email).Scan(&exists)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check if user exists"})
+		return
+	}
+	if exists {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "User already exists"})
+		return
+	}
+
+	// Hash the password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
 		return
 	}
 
+	// Get the role ID from the role name
 	var roleID int
 	err = db.QueryRow("SELECT role_id FROM roles WHERE role_name = $1", req.Role).Scan(&roleID)
 	if err != nil {
@@ -189,6 +203,7 @@ func registerUser(c *gin.Context) {
 		return
 	}
 
+	// Insert the new user
 	_, err = db.Exec("INSERT INTO users (email, password_hash, name, role_id) VALUES ($1, $2, $3, $4)",
 		req.Email, string(hashedPassword), req.Name, roleID)
 	if err != nil {
@@ -196,6 +211,7 @@ func registerUser(c *gin.Context) {
 		return
 	}
 
+	// Return success message
 	c.JSON(http.StatusOK, gin.H{"message": "Registration successful"})
 }
 
