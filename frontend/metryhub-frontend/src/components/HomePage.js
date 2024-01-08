@@ -8,12 +8,17 @@ import InfoIcon from '@mui/icons-material/Info';
 import { useFormik } from 'formik';
 import * as Yup from 'yup';
 
+
 const HomePage = () => {
   const [open, setOpen] = useState(false);
   const [role, setRole] = useState(null);
   const [roles, setRoles] = useState([]);
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+
 
   useEffect(() => {
     document.title = "MetryHub";
@@ -42,6 +47,37 @@ const HomePage = () => {
     const selectedRole = roles.find(r => r.role_name === event.target.value);
     setRole(selectedRole);
   };
+
+  const handleLogin = async (event) => {
+    event.preventDefault(); // Prevent the form from refreshing the page
+    setLoginError(''); // Reset login error
+  
+    // Add your login logic here
+    try {
+      const response = await fetch('http://localhost:8080/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
+  
+      const data = await response.json();
+      if (response.ok) {
+        // Handle successful login
+        console.log('Login successful:', data);
+        // Redirect to dashboard or set state accordingly
+      } else {
+        // Handle login error
+        setLoginError('Invalid email or password');
+      }
+    } catch (error) {
+      // Handle network error
+      setLoginError('Login failed. Please try again later.');
+      console.error('Login error:', error);
+    }
+  };
+  
 
   const formik = useFormik({
     initialValues: {
@@ -103,6 +139,10 @@ const HomePage = () => {
 
   const backgroundColor = 'rgba(242, 245, 250, 1)';
 
+  const capitalizeFirstLetter = (string) => {
+    return string.charAt(0).toUpperCase() + string.slice(1);
+  }
+
   return (
     <Container component="main" maxWidth="xs" sx={{
       display: 'flex',
@@ -136,46 +176,58 @@ const HomePage = () => {
 
       {/* Login Form */}
       <Paper elevation={4} sx={{ padding: 2, marginTop: 4, width: '100%', maxWidth: 400 }}>
-        <TextField
-          variant="outlined"
-          margin="normal"
-          required
-          fullWidth
-          id="email"
-          label="Email Address"
-          name="email"
-          autoComplete="email"
-          autoFocus
-        />
-        <TextField
-          variant="outlined"
-          margin="normal"
-          required
-          fullWidth
-          name="password"
-          label="Password"
-          type="password"
-          id="password"
-          autoComplete="current-password"
-        />
-        <Button
-          type="submit"
-          fullWidth
-          variant="contained"
-          color="primary"
-          sx={{ margin: '24px 0px 16px' }}
-        >
-          Log In
-        </Button>
-        <Button
-          type="button"
-          fullWidth
-          variant="outlined"
-          sx={{ marginBottom: 2 }}
-          onClick={handleOpen}
-        >
-          Create new account
-        </Button>
+        <form onSubmit={handleLogin}>
+          <TextField
+            variant="outlined"
+            margin="normal"
+            required
+            fullWidth
+            id="email"
+            label="Email Address"
+            name="email"
+            autoComplete="email"
+            autoFocus
+            value={email} // Bind the email state variable
+            onChange={(e) => setEmail(e.target.value)} // Update the state variable when the input changes
+          />
+          <TextField
+            variant="outlined"
+            margin="normal"
+            required
+            fullWidth
+            name="password"
+            label="Password"
+            type="password"
+            id="password"
+            autoComplete="current-password"
+            value={password} // Bind the password state variable
+            onChange={(e) => setPassword(e.target.value)} // Update the state variable when the input changes
+          />
+          <Button
+            type="submit" // Make sure this button is of type submit to trigger form submission
+            fullWidth
+            variant="contained"
+            color="primary"
+            sx={{ margin: '24px 0px 16px' }}
+          >
+            Log In
+          </Button>
+          <Button
+            type="button"
+            fullWidth
+            variant="outlined"
+            sx={{ marginBottom: 2 }}
+            onClick={handleOpen}
+          >
+            Create new account
+          </Button>
+        </form>
+        {/* If there is a login error, display it below the form */}
+        {loginError && (
+          <Alert severity="error" sx={{ mt: 2 }}>
+            {loginError}
+          </Alert>
+        )}
       </Paper>
 
       {/* Registration Dialog */}
@@ -248,7 +300,7 @@ const HomePage = () => {
             >
               {roles.map((roleItem) => (
                 <MenuItem key={roleItem.role_id} value={roleItem.role_name}>
-                  {roleItem.role_name}
+                  {capitalizeFirstLetter(roleItem.role_name)}
                 </MenuItem>
               ))}
             </Select>
