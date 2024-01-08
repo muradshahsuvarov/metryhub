@@ -18,6 +18,8 @@ import (
 
 var deviceToken string
 
+const unsentMessagesFile = "unsent_messages.txt"
+
 type DeviceData struct {
 	DeviceToken string `json:"deviceToken"`
 	DataKey     string `json:"dataKey"`
@@ -104,8 +106,6 @@ func postDataToServer(data *metryhub.IotData) {
 
 	fmt.Println("Data sent successfully")
 }
-
-const unsentMessagesFile = "unsent_messages.txt"
 
 func saveUnsentMessage(data []byte) {
 	file, err := os.OpenFile(unsentMessagesFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
