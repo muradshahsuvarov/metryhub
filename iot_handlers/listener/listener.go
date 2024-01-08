@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
 	"metryhub"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -13,13 +16,26 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+var deviceToken string
+
+type DeviceData struct {
+	DeviceToken string `json:"deviceToken"`
+	DataKey     string `json:"dataKey"`
+	DataValue   string `json:"dataValue"`
+}
+
 func main() {
 	var clientId string
 	var topic string
 
 	flag.StringVar(&clientId, "client_id", "myclientlistener", "Client id for the listener")
 	flag.StringVar(&topic, "topic", "iot_device", "IoT device topic to listen to")
+	flag.StringVar(&deviceToken, "device_token", "", "Device token for authentication")
 	flag.Parse()
+
+	if deviceToken == "" {
+		log.Fatal("Device token is required")
+	}
 
 	// MQTT broker setup
 	opts := mqtt.NewClientOptions().AddBroker("tcp://localhost:1883")
@@ -34,10 +50,10 @@ func main() {
 			return
 		}
 
-		timestamp := data.Timestamp.AsTime()
-		fmt.Printf("Received message on topic %s: Temp = %.2f, Humidity = %.2f, Timestamp = %s\n",
-			msg.Topic(), data.GetData().Temperature, data.GetData().Humidity, timestamp.Format("2006-01-02 15:04:05.000000"))
+		postDataToServer(data)
 	})
+
+	opts.SetCleanSession(false)
 
 	// Create and start a client using the above options
 	client := mqtt.NewClient(opts)
@@ -52,6 +68,9 @@ func main() {
 
 	fmt.Printf("Subscribed to topic %s\n", topic)
 
+	// Handle unsent messages
+	handleUnsentMessages()
+
 	// Wait for SIGINT (Ctrl+C) to exit
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, os.Interrupt, syscall.SIGTERM)
@@ -60,4 +79,67 @@ func main() {
 	// Clean disconnect
 	client.Disconnect(250)
 	fmt.Println("Listener disconnected")
+}
+
+func postDataToServer(data *metryhub.IotData) {
+	deviceData := DeviceData{
+		DeviceToken: deviceToken,
+		DataKey:     "Temperature",
+		DataValue:   fmt.Sprintf("%.2f", data.GetData().Temperature),
+	}
+
+	dataBytes, err := json.Marshal(deviceData)
+	if err != nil {
+		log.Printf("Error marshalling data: %v", err)
+		saveUnsentMessage(dataBytes)
+		return
+	}
+
+	resp, err := http.Post("http://localhost:8080/device-data", "application/json", bytes.NewBuffer(dataBytes))
+	if err != nil || resp.StatusCode != http.StatusOK {
+		log.Printf("Failed to send data to server: %v", err)
+		saveUnsentMessage(dataBytes)
+		return
+	}
+
+	fmt.Println("Data sent successfully")
+}
+
+const unsentMessagesFile = "unsent_messages.txt"
+
+func saveUnsentMessage(data []byte) {
+	file, err := os.OpenFile(unsentMessagesFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Printf("Error opening file to save unsent message: %v", err)
+		return
+	}
+	defer file.Close()
+
+	if _, err := file.Write(append(data, '\n')); err != nil {
+		log.Printf("Error writing unsent message to file: %v", err)
+	}
+}
+
+func handleUnsentMessages() {
+	data, err := os.ReadFile(unsentMessagesFile)
+	if err != nil {
+		log.Printf("Error reading unsent messages file: %v", err)
+		return
+	}
+
+	messages := bytes.Split(data, []byte{'\n'})
+	for _, msg := range messages {
+		if len(msg) > 0 {
+			resp, err := http.Post("http://localhost:8080/device-data", "application/json", bytes.NewBuffer(msg))
+			if err != nil || resp.StatusCode != http.StatusOK {
+				log.Printf("Failed to resend unsent data: %v", err)
+				return
+			}
+		}
+	}
+
+	// Clear the file after successfully sending all messages
+	if err := os.Truncate(unsentMessagesFile, 0); err != nil {
+		log.Printf("Error clearing unsent messages file: %v", err)
+	}
 }

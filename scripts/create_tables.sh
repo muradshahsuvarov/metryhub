@@ -28,9 +28,8 @@ CREATE TABLE iot_devices (
     vendor_email VARCHAR(255) REFERENCES users(email),
     device_name VARCHAR(255) NOT NULL,
     device_type VARCHAR(255) NOT NULL,
+    device_token VARCHAR(255) NOT NULL,
     registration_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
-);
-
 CREATE TABLE device_data (
     data_id SERIAL PRIMARY KEY,
     device_id INTEGER REFERENCES iot_devices(device_id),
