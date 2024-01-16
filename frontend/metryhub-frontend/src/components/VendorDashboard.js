@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   Box, CssBaseline, Drawer, AppBar, Toolbar, List, Typography, Divider, ListItem,
   ListItemIcon, ListItemText, Grid, Paper, styled, IconButton, useTheme, useMediaQuery, TextField, Button, Dialog,
-  DialogActions, DialogContent, DialogContentText, DialogTitle
+  DialogActions, DialogContent, DialogContentText, DialogTitle, ListItemSecondaryAction, Collapse, Card, CardContent, CardActions, Tooltip
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import DashboardIcon from '@mui/icons-material/Dashboard';
@@ -17,10 +17,18 @@ import ReactApexChart from 'react-apexcharts';
 import { CopyToClipboard } from 'react-copy-to-clipboard';
 import CheckIcon from '@mui/icons-material/Check';
 import FileCopyIcon from '@mui/icons-material/FileCopy';
-
+import NotificationsIcon from '@mui/icons-material/Notifications';
+import CloseIcon from '@mui/icons-material/Close';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import NotificationCard from './NotificationCard';
+import AccountCard from './AccountCard';
+import DeviceDataListCard from './DeviceDataListCard';
+import ClientGlobeCard from './ClientGlobeCard';
   
 
 const drawerWidth = 240;
+
+
 
 const Main = styled('main', { shouldForwardProp: (prop) => prop !== 'open' })(
   ({ theme, open }) => ({
@@ -51,6 +59,17 @@ const DrawerHeader = styled('div')(({ theme }) => ({
 }));
 
 const AnalyticDashboard = () => {
+
+  const clientData = [
+    { country: 'US', clients: 150 }, // United States
+    { country: 'DE', clients: 80 },  // Germany
+    { country: 'BR', clients: 60 },  // Brazil
+    { country: 'IN', clients: 100 }, // India
+    { country: 'CN', clients: 120 }, // China
+    { country: 'RU', clients: 90 },  // Russia
+    { country: 'AU', clients: 50 },  // Australia
+    // ... add more countries as needed
+];
 
     const [anchorEl, setAnchorEl] = React.useState(null);
     const openMenu = Boolean(anchorEl);
@@ -335,6 +354,18 @@ const AnalyticDashboard = () => {
                     ))}
                     </List>
                     </Paper>
+                </Grid>
+                <Grid item xs={12} sm={6} md={4}>
+                    <NotificationCard />
+                </Grid>
+                <Grid item xs={12} sm={6} md={4}>
+                    <AccountCard />
+                </Grid>
+                <Grid item xs={12} sm={6} md={4}>
+                     <DeviceDataListCard devices={iotDevices} />
+                </Grid>
+                <Grid item xs={12} sm={6} md={4}>
+                     <ClientGlobeCard clientData={clientData} />
                 </Grid>
           {/* Additional cards and charts can be added in a similar fashion */}
         </Grid>
